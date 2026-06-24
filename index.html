@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Garden Planner — zones, light & layout</title>
+<style>
+  :root{
+    --bg:#fbfaf5; --panel:#ffffff; --ink:#2c2f26; --soft:#7a7c6e; --line:#e3e0d3;
+    --accent:#3f6a34; --accent2:#8a4f2a; --sun:#fbeecb; --partial:#eef3e6; --indoor:#e7eef4;
+    --warn:#c0552e; --chip:#f1efe4; --shadow:0 1px 3px rgba(0,0,0,.08);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       background:var(--bg);color:var(--ink);font-size:14px;line-height:1.45}
+  header{padding:16px 20px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:20}
+  header h1{margin:0 0 2px;font-size:18px}
+  header p{margin:0;color:var(--soft);font-size:12.5px}
+  .bar{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;align-items:center}
+  button,select,input{font:inherit;color:var(--ink)}
+  button{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:6px 11px;cursor:pointer;box-shadow:var(--shadow)}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  button.ghost{background:transparent;box-shadow:none}
+  input,select{border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:#fff}
+  .layout{display:flex;gap:16px;align-items:flex-start;padding:16px 20px}
+  .palette{flex:0 0 250px;position:sticky;top:120px;background:var(--panel);border:1px solid var(--line);
+           border-radius:12px;padding:12px;box-shadow:var(--shadow);max-height:calc(100vh - 150px);overflow:auto}
+  .palette h2{font-size:13px;margin:0 0 8px;text-transform:uppercase;letter-spacing:.04em;color:var(--soft)}
+  .tabs{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+  .tabs button{padding:4px 8px;font-size:12px;border-radius:999px}
+  .tabs button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .pitem{display:flex;align-items:center;gap:7px;padding:6px 7px;border:1px solid var(--line);border-radius:8px;
+         margin-bottom:5px;cursor:grab;background:#fff;user-select:none}
+  .pitem:active{cursor:grabbing}
+  .pitem .em{font-size:16px;width:20px;text-align:center}
+  .pitem .nm{flex:1;font-size:12.5px}
+  .pitem .lt{font-size:10px;color:var(--soft);border:1px solid var(--line);border-radius:999px;padding:1px 6px}
+  .zones{flex:1;min-width:0;display:flex;flex-direction:column;gap:18px}
+  .zone{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;box-shadow:var(--shadow)}
+  .zone .zh{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+  .zone .zh .zname{font-size:15px;font-weight:600}
+  .zone .zh .ztag{font-size:11px;border-radius:999px;padding:2px 9px;border:1px solid var(--line)}
+  .ztag.full{background:var(--sun)} .ztag.partial{background:var(--partial)} .ztag.indoor{background:var(--indoor)}
+  .zone .zh .dim{font-size:12px;color:var(--soft)}
+  .zone .zh .sp{flex:1}
+  .gridwrap{overflow:auto;border:1px solid var(--line);border-radius:8px;background:#f6f4ea;padding:14px}
+  .grid{position:relative;display:grid;gap:0;margin:0 auto}
+  .cell{border:.5px solid #e0dcca;position:relative}
+  .cell.hover{background:rgba(63,106,52,.14)}
+  .tok{position:absolute;inset:6%;border-radius:50%;display:flex;align-items:center;justify-content:center;
+       font-size:11px;color:#fff;cursor:grab;box-shadow:0 1px 2px rgba(0,0,0,.25);z-index:3;border:1.5px solid rgba(255,255,255,.6)}
+  .tok:active{cursor:grabbing}
+  .tok.warn{outline:2.5px solid var(--warn);outline-offset:1px}
+  .tok .lbl{position:absolute;top:100%;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:9px;
+            color:var(--ink);background:rgba(255,255,255,.82);padding:0 3px;border-radius:3px;margin-top:1px;pointer-events:none;opacity:0}
+  .zone:hover .tok .lbl{opacity:1}
+  .canopyOn .canopy{display:block}
+  .canopy{display:none;position:absolute;border-radius:50%;background:currentColor;opacity:.16;z-index:1;pointer-events:none;
+          transform:translate(-50%,-50%)}
+  .empty{color:var(--soft);font-size:13px;padding:30px;text-align:center;border:1.5px dashed var(--line);border-radius:12px}
+  .warnbox{margin-top:8px;font-size:12px;color:var(--warn)}
+  .legend{font-size:11px;color:var(--soft);margin-top:6px}
+  .addform{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--chip);border:1px solid var(--line);
+           border-radius:12px;padding:10px 12px;margin-bottom:4px}
+  .addform label{font-size:11px;color:var(--soft);display:flex;flex-direction:column;gap:2px}
+  .addform input[type=number]{width:74px}
+  .addform input[type=text]{width:150px}
+  #trash{margin-left:auto;font-size:12px;color:var(--soft);border:1.5px dashed var(--line);border-radius:8px;padding:6px 12px}
+  #trash.hot{border-color:var(--warn);color:var(--warn);background:#fbeee8}
+  .row{display:flex;gap:6px;align-items:center}
+  .mini{font-size:11px;color:var(--soft)}
+  a.gh{color:var(--accent);text-decoration:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>🌿 Garden Planner</h1>
+  <p>Define each area of your plot — its <b>light</b> and <b>size in feet</b> — then drag plants in. Toggle canopy to see how big things get, and the planner flags any plant that's in the wrong light.</p>
+  <div class="bar">
+    <button class="primary" id="btnCanopy">🌳 Show canopy spread</button>
+    <button id="btnExample" class="ghost">Load example</button>
+    <span class="sp" style="flex:1"></span>
+    <button id="btnExport">⤓ Export JSON</button>
+    <button id="btnImport">⤒ Import JSON</button>
+    <input type="file" id="fileImport" accept="application/json" style="display:none"/>
+    <button id="btnReset" class="ghost">Reset all</button>
+    <div id="trash">🗑 drag here to remove</div>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="palette">
+    <h2>Plants</h2>
+    <div class="tabs" id="tabs"></div>
+    <div id="plist"></div>
+    <div class="legend">Light tags: ☀️ full sun · ⛅ partial · 🌑 shade/indoor. Drag a plant onto any zone cell. Drag placed plants to move them, or onto the 🗑 to remove. Double-click a plant to remove it.</div>
+  </aside>
+
+  <main class="zones" id="main">
+    <div class="addform">
+      <label>Zone name<input type="text" id="zName" placeholder="e.g. Front bed"/></label>
+      <label>Light
+        <select id="zLight">
+          <option value="full">☀️ Full sun</option>
+          <option value="partial">⛅ Partial</option>
+          <option value="indoor">🌑 Indoor / shade</option>
+        </select>
+      </label>
+      <label>Length (ft)<input type="number" id="zLen" min="1" max="120" value="10"/></label>
+      <label>Width (ft)<input type="number" id="zWid" min="1" max="120" value="6"/></label>
+      <button class="primary" id="btnAddZone" style="align-self:flex-end">+ Add zone</button>
+    </div>
+    <div id="zoneList"></div>
+  </main>
+</div>
+
+<script>
+/* ---------- plant library (generic; light: full | partial | shade ; spread = mid-size diameter ft) ---------- */
+const PLANTS=[
+ // Trees & large
+ {k:"shade_tree",n:"Shade tree",e:"🌳",c:"Trees",l:"full",s:14,col:"#3f6a34"},
+ {k:"palm",n:"Palm",e:"🌴",c:"Trees",l:"full",s:8,col:"#3f7a3a"},
+ {k:"fruit_tree",n:"Fruit tree",e:"🍎",c:"Trees",l:"full",s:6,col:"#7fae5e"},
+ {k:"citrus",n:"Citrus",e:"🍋",c:"Trees",l:"full",s:6,col:"#8fbf4a"},
+ {k:"banana",n:"Banana",e:"🍌",c:"Trees",l:"full",s:7,col:"#6f8f3f"},
+ {k:"tall_grass",n:"Bamboo / tall grass",e:"🎋",c:"Trees",l:"full",s:6,col:"#9ec06a"},
+ {k:"conifer",n:"Conifer / evergreen",e:"🌲",c:"Trees",l:"full",s:6,col:"#33502f"},
+ // Shrubs & flowers
+ {k:"flower_shrub",n:"Flowering shrub",e:"🌺",c:"Shrubs & flowers",l:"full",s:3.5,col:"#d6453f"},
+ {k:"rose",n:"Rose",e:"🌹",c:"Shrubs & flowers",l:"full",s:2.5,col:"#d64070"},
+ {k:"climber_flower",n:"Flowering climber",e:"🌸",c:"Shrubs & flowers",l:"full",s:4,col:"#c0388a"},
+ {k:"hedge",n:"Hedge / topiary",e:"🟩",c:"Shrubs & flowers",l:"full",s:2.5,col:"#3f6a34"},
+ {k:"perennial",n:"Perennial flower",e:"🌼",c:"Shrubs & flowers",l:"full",s:1.5,col:"#e8b62c"},
+ {k:"bedding",n:"Bedding annual",e:"🟡",c:"Shrubs & flowers",l:"full",s:1,col:"#e8b62c"},
+ {k:"partial_flower",n:"Part-shade flower",e:"🌷",c:"Shrubs & flowers",l:"partial",s:1.5,col:"#e07b9a"},
+ {k:"ornamental_grass",n:"Ornamental grass",e:"🌾",c:"Shrubs & flowers",l:"full",s:2.5,col:"#cbb76a"},
+ {k:"succulent_bed",n:"Desert rose / succulent shrub",e:"🌵",c:"Shrubs & flowers",l:"full",s:1.5,col:"#e07b9a"},
+ // Foliage & indoor
+ {k:"foliage",n:"Leafy foliage",e:"🌿",c:"Foliage & indoor",l:"shade",s:1.7,col:"#3f6a34"},
+ {k:"fern",n:"Fern",e:"🌿",c:"Foliage & indoor",l:"shade",s:2,col:"#6f9a4f"},
+ {k:"snake",n:"Snake plant",e:"🪴",c:"Foliage & indoor",l:"shade",s:1.2,col:"#4f7a3e"},
+ {k:"monstera",n:"Monstera",e:"🌿",c:"Foliage & indoor",l:"partial",s:3,col:"#4f8a3e"},
+ {k:"peace_lily",n:"Peace lily",e:"🤍",c:"Foliage & indoor",l:"shade",s:1.5,col:"#cfe0c0"},
+ {k:"anthurium",n:"Anthurium",e:"🌺",c:"Foliage & indoor",l:"shade",s:1.2,col:"#d6453f"},
+ {k:"palm_indoor",n:"Indoor palm",e:"🪴",c:"Foliage & indoor",l:"partial",s:2.5,col:"#3f7a3a"},
+ {k:"orchid",n:"Orchid",e:"🌸",c:"Foliage & indoor",l:"shade",s:1,col:"#c77fae"},
+ {k:"jade",n:"Jade / succulent",e:"🪴",c:"Foliage & indoor",l:"partial",s:1,col:"#8fae8a"},
+ // Edibles
+ {k:"tomato",n:"Tomato",e:"🍅",c:"Edibles",l:"full",s:1.5,col:"#d6453f"},
+ {k:"chilli",n:"Chilli / pepper",e:"🌶️",c:"Edibles",l:"full",s:1.5,col:"#3f7a3a"},
+ {k:"eggplant",n:"Eggplant / brinjal",e:"🍆",c:"Edibles",l:"full",s:2,col:"#8a5aa8"},
+ {k:"leafy_green",n:"Leafy greens",e:"🥬",c:"Edibles",l:"partial",s:1,col:"#5f9145"},
+ {k:"herb",n:"Herb",e:"🌿",c:"Edibles",l:"full",s:1,col:"#6f9a6a"},
+ {k:"root_veg",n:"Root crop (ginger/turmeric)",e:"🫚",c:"Edibles",l:"partial",s:1.5,col:"#caa45a"},
+ {k:"vine_veg",n:"Vegetable vine",e:"🥒",c:"Edibles",l:"full",s:2,col:"#6f9a3f"},
+ {k:"strawberry",n:"Strawberry / berry",e:"🍓",c:"Edibles",l:"full",s:1,col:"#d6453f"},
+ // Ground & climbers
+ {k:"groundcover",n:"Groundcover",e:"🟢",c:"Ground & climbers",l:"full",s:0.8,col:"#b6cf98"},
+ {k:"shade_ground",n:"Shade groundcover",e:"🍀",c:"Ground & climbers",l:"shade",s:0.8,col:"#5f9145"},
+ {k:"lawn",n:"Lawn / turf patch",e:"🟩",c:"Ground & climbers",l:"full",s:1,col:"#7fae4a"},
+ {k:"wall_climber",n:"Wall climber",e:"🪟",c:"Ground & climbers",l:"partial",s:1,col:"#6f9a4f"},
+ {k:"trailing",n:"Trailing / spiller",e:"🌱",c:"Ground & climbers",l:"partial",s:1,col:"#86b070"},
+ {k:"pot_feature",n:"Feature pot",e:"🏺",c:"Ground & climbers",l:"partial",s:1.5,col:"#8a6a44"},
+];
+const CATS=[...new Set(PLANTS.map(p=>p.c))];
+const LIGHT_RANK={shade:1,indoor:1,partial:2,full:3};
+const PLANTBY=Object.fromEntries(PLANTS.map(p=>[p.k,p]));
+const KEY="gardenPlannerGeneric_v1";
+
+let state={zones:[],placements:[]};
+let curCat=CATS[0];
+let uid=()=>Math.random().toString(36).slice(2,9);
+
+/* ---------- persistence ---------- */
+function save(){localStorage.setItem(KEY,JSON.stringify(state));}
+function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.zones)state=s;}catch(e){}}
+
+/* ---------- light compatibility ---------- */
+function lightMsg(plant,zone){
+  const need=LIGHT_RANK[plant.l], have=LIGHT_RANK[zone.light];
+  if(need===have) return null;
+  if(need>have) return `needs more light (${plant.l}) than this ${zone.light} zone`;
+  return `prefers ${plant.l}; this ${zone.light} zone may be too bright`;
+}
+
+/* ---------- palette ---------- */
+function renderTabs(){
+  const t=document.getElementById('tabs');t.innerHTML='';
+  CATS.forEach(c=>{const b=document.createElement('button');b.textContent=c;
+    if(c===curCat)b.className='on';b.onclick=()=>{curCat=c;renderTabs();renderPalette();};t.appendChild(b);});
+}
+function lightEmoji(l){return l==='full'?'☀️':(l==='partial'?'⛅':'🌑');}
+function renderPalette(){
+  const box=document.getElementById('plist');box.innerHTML='';
+  PLANTS.filter(p=>p.c===curCat).forEach(p=>{
+    const d=document.createElement('div');d.className='pitem';d.draggable=true;
+    d.innerHTML=`<span class="em">${p.e}</span><span class="nm">${p.n}</span><span class="lt">${lightEmoji(p.l)} ${p.s}ft</span>`;
+    d.addEventListener('dragstart',ev=>{ev.dataTransfer.setData('text/plain',JSON.stringify({src:'palette',k:p.k}));});
+    box.appendChild(d);
+  });
+}
+
+/* ---------- zones ---------- */
+function cellPx(z){return Math.max(13,Math.min(40,Math.round(620/Math.max(z.L,z.W))));}
+function renderZones(){
+  const list=document.getElementById('zoneList');list.innerHTML='';
+  if(!state.zones.length){list.innerHTML='<div class="empty">No zones yet. Add your first area above — give it a name, its light, and its size in feet.</div>';return;}
+  state.zones.forEach(z=>{
+    const cp=cellPx(z);
+    const wrap=document.createElement('div');wrap.className='zone';
+    const warns=state.placements.filter(pl=>pl.zoneId===z.id).map(pl=>{
+      const p=PLANTBY[pl.k];const m=lightMsg(p,z);return m?`${p.e} ${p.n}: ${m}`:null;}).filter(Boolean);
+    wrap.innerHTML=`<div class="zh">
+        <span class="zname">${escapeHtml(z.name)}</span>
+        <span class="ztag ${z.light}">${lightEmoji(z.light)} ${z.light} light</span>
+        <span class="dim">${z.L} × ${z.W} ft · grid 1 ft</span>
+        <span class="sp" style="flex:1"></span>
+        <button class="ghost mini" data-edit="${z.id}">edit</button>
+        <button class="ghost mini" data-del="${z.id}">delete</button>
+      </div>`;
+    const gw=document.createElement('div');gw.className='gridwrap';
+    const g=document.createElement('div');g.className='grid';
+    g.style.gridTemplateColumns=`repeat(${z.L},${cp}px)`;
+    g.style.gridTemplateRows=`repeat(${z.W},${cp}px)`;
+    g.style.width=(z.L*cp)+'px';
+    for(let r=0;r<z.W;r++)for(let c=0;c<z.L;c++){
+      const cell=document.createElement('div');cell.className='cell';cell.dataset.c=c;cell.dataset.r=r;cell.dataset.z=z.id;
+      cell.addEventListener('dragover',ev=>{ev.preventDefault();cell.classList.add('hover');});
+      cell.addEventListener('dragleave',()=>cell.classList.remove('hover'));
+      cell.addEventListener('drop',ev=>{ev.preventDefault();cell.classList.remove('hover');onDrop(ev,z.id,c,r);});
+      g.appendChild(cell);
+    }
+    // tokens
+    state.placements.filter(pl=>pl.zoneId===z.id).forEach(pl=>{
+      const p=PLANTBY[pl.k];if(!p)return;
+      const cell=g.children[pl.r*z.L+pl.c];if(!cell)return;
+      const t=document.createElement('div');t.className='tok'+(lightMsg(p,z)?' warn':'');
+      t.style.background=p.col;t.style.color=p.col;t.title=p.n+(lightMsg(p,z)?' — '+lightMsg(p,z):'');
+      t.draggable=true;t.innerHTML=`<span style="color:#fff">${p.e}</span><span class="lbl">${p.n}</span>`;
+      const span=document.createElement('div');span.className='canopy';
+      const d=p.s*cp;span.style.width=d+'px';span.style.height=d+'px';span.style.left='50%';span.style.top='50%';
+      t.appendChild(span);
+      t.addEventListener('dragstart',ev=>{ev.dataTransfer.setData('text/plain',JSON.stringify({src:'placed',id:pl.id}));});
+      t.addEventListener('dblclick',()=>{state.placements=state.placements.filter(x=>x.id!==pl.id);save();renderZones();});
+      cell.appendChild(t);
+    });
+    gw.appendChild(g);wrap.appendChild(gw);
+    if(warns.length){const w=document.createElement('div');w.className='warnbox';
+      w.innerHTML='⚠ '+warns.length+' light mismatch'+(warns.length>1?'es':'')+': '+warns.join(' · ');wrap.appendChild(w);}
+    list.appendChild(wrap);
+  });
+  list.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{
+    if(confirm('Delete this zone and its plants?')){const id=b.dataset.del;
+      state.zones=state.zones.filter(z=>z.id!==id);state.placements=state.placements.filter(p=>p.zoneId!==id);save();renderZones();}});
+  list.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>editZone(b.dataset.edit));
+}
+
+function onDrop(ev,zoneId,c,r){
+  let data;try{data=JSON.parse(ev.dataTransfer.getData('text/plain'));}catch(e){return;}
+  // one plant per cell
+  const occupied=state.placements.find(p=>p.zoneId===zoneId&&p.c===c&&p.r===r);
+  if(data.src==='palette'){
+    if(occupied)return;
+    state.placements.push({id:uid(),zoneId,k:data.k,c,r});
+  }else if(data.src==='placed'){
+    const pl=state.placements.find(p=>p.id===data.id);if(!pl)return;
+    if(occupied&&occupied.id!==pl.id)return;
+    pl.zoneId=zoneId;pl.c=c;pl.r=r;
+  }
+  save();renderZones();
+}
+
+function editZone(id){
+  const z=state.zones.find(x=>x.id===id);if(!z)return;
+  const name=prompt('Zone name:',z.name);if(name===null)return;
+  const light=prompt('Light — type full, partial, or indoor:',z.light);if(light===null)return;
+  const L=parseInt(prompt('Length (ft):',z.L),10);const W=parseInt(prompt('Width (ft):',z.W),10);
+  z.name=name.trim()||z.name;z.light=['full','partial','indoor'].includes(light)?light:z.light;
+  if(L>0)z.L=Math.min(120,L);if(W>0)z.W=Math.min(120,W);
+  // drop placements now outside bounds
+  state.placements=state.placements.filter(p=>p.zoneId!==id||(p.c<z.L&&p.r<z.W));
+  save();renderZones();
+}
+
+function escapeHtml(s){return (s||'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
+
+/* ---------- toolbar ---------- */
+document.getElementById('btnAddZone').onclick=()=>{
+  const name=document.getElementById('zName').value.trim()||('Zone '+(state.zones.length+1));
+  const light=document.getElementById('zLight').value;
+  const L=Math.min(120,Math.max(1,parseInt(document.getElementById('zLen').value,10)||10));
+  const W=Math.min(120,Math.max(1,parseInt(document.getElementById('zWid').value,10)||6));
+  state.zones.push({id:uid(),name,light,L,W});document.getElementById('zName').value='';save();renderZones();
+};
+document.getElementById('btnCanopy').onclick=function(){
+  document.body.classList.toggle('canopyOn');
+  this.classList.toggle('primary');
+  this.textContent=document.body.classList.contains('canopyOn')?'🌳 Hide canopy spread':'🌳 Show canopy spread';
+};
+document.getElementById('btnReset').onclick=()=>{if(confirm('Clear all zones and plants?')){state={zones:[],placements:[]};save();renderZones();}};
+document.getElementById('btnExport').onclick=()=>{
+  const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='garden-plan.json';a.click();
+};
+document.getElementById('btnImport').onclick=()=>document.getElementById('fileImport').click();
+document.getElementById('fileImport').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;const rd=new FileReader();
+  rd.onload=()=>{try{const s=JSON.parse(rd.result);if(s.zones&&s.placements){state=s;save();renderZones();}else alert('Not a valid plan file.');}catch(err){alert('Could not read file.');}};
+  rd.readAsText(f);
+};
+/* trash */
+const trash=document.getElementById('trash');
+trash.addEventListener('dragover',e=>{e.preventDefault();trash.classList.add('hot');});
+trash.addEventListener('dragleave',()=>trash.classList.remove('hot'));
+trash.addEventListener('drop',e=>{e.preventDefault();trash.classList.remove('hot');
+  let d;try{d=JSON.parse(e.dataTransfer.getData('text/plain'));}catch(err){return;}
+  if(d.src==='placed'){state.placements=state.placements.filter(p=>p.id!==d.id);save();renderZones();}});
+
+/* example */
+document.getElementById('btnExample').onclick=()=>{
+  if(state.zones.length&&!confirm('Replace current plan with the example?'))return;
+  const f=uid(),s=uid(),i=uid();
+  state={zones:[
+    {id:f,name:"Front bed",light:"full",L:14,W:5},
+    {id:s,name:"Side path",light:"partial",L:10,W:3},
+    {id:i,name:"Veranda",light:"indoor",L:6,W:4},
+  ],placements:[
+    {id:uid(),zoneId:f,k:"flower_shrub",c:2,r:1},{id:uid(),zoneId:f,k:"rose",c:5,r:1},
+    {id:uid(),zoneId:f,k:"perennial",c:8,r:2},{id:uid(),zoneId:f,k:"bedding",c:11,r:3},
+    {id:uid(),zoneId:f,k:"palm",c:12,r:1},
+    {id:uid(),zoneId:s,k:"fern",c:1,r:1},{id:uid(),zoneId:s,k:"foliage",c:4,r:1},{id:uid(),zoneId:s,k:"leafy_green",c:7,r:2},
+    {id:uid(),zoneId:i,k:"snake",c:1,r:1},{id:uid(),zoneId:i,k:"peace_lily",c:3,r:2},{id:uid(),zoneId:i,k:"orchid",c:4,r:1},
+  ]};save();renderZones();
+};
+
+/* ---------- init ---------- */
+load();renderTabs();renderPalette();renderZones();
+</script>
+</body>
+</html>
