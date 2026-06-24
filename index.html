@@ -73,6 +73,28 @@
   #trash.hot{border-color:var(--warn);color:var(--warn);background:#fbeee8}
   .row{display:flex;gap:6px;align-items:center}
   .mini{font-size:11px;color:var(--soft)}
+  /* tap-to-place (works on touch where drag doesn't) */
+  .pitem.armed{outline:2px solid var(--accent);outline-offset:1px;background:#eef3e6}
+  #armbar{display:none;align-items:center;gap:8px;background:#eef3e6;border:1px solid var(--accent);
+          border-radius:8px;padding:6px 9px;margin-bottom:8px;font-size:12px}
+  #armbar b{font-weight:600}
+  #armbar button{padding:2px 8px;font-size:11px;margin-left:auto}
+  .tok .x{position:absolute;top:-7px;right:-7px;width:16px;height:16px;border-radius:50%;background:#fff;color:var(--warn);
+          border:1px solid var(--warn);font-size:11px;line-height:14px;text-align:center;display:none;z-index:5;cursor:pointer}
+  .tok:hover .x,.touch .tok .x{display:block}
+  .cell.arm{cursor:copy}
+  /* responsive: stack palette above the zones on narrow screens */
+  @media (max-width:760px){
+    header{padding:12px 14px}
+    .layout{flex-direction:column;padding:12px 14px;gap:12px}
+    .palette{flex:1 1 auto;width:100%;position:static;max-height:none}
+    .addform{gap:7px}
+    .addform label{flex:1 1 auto}
+    .addform input[type=text]{width:100%}
+    .addform input[type=number]{width:100%}
+    #trash{margin-left:0;width:100%;text-align:center}
+    .bar{gap:6px}
+  }
 </style>
 </head>
 <body>
@@ -98,6 +120,7 @@
       <input type="search" id="search" placeholder="🔍 Search plants…" autocomplete="off"/>
       <select id="country"></select>
     </div>
+    <div id="armbar"></div>
     <div class="tabs" id="tabs"></div>
     <div class="pcount" id="pcount"></div>
     <div id="plist"></div>
@@ -263,7 +286,9 @@ let state={zones:[],placements:[]};
 let curCat="All";
 let curCountry="All";
 let curSearch="";
+let armed=null; // {type:'place',k} or {type:'move',id}
 let uid=()=>Math.random().toString(36).slice(2,9);
+if('ontouchstart' in window) document.documentElement.classList.add('touch');
 
 /* ---------- persistence ---------- */
 function save(){localStorage.setItem(KEY,JSON.stringify(state));}
@@ -304,11 +329,24 @@ function renderPalette(){
     (curCountry!=='All'?' for '+curCountry:'');
   if(!items.length){box.innerHTML='<div class="mini">No matches — try a different country, category, or search.</div>';return;}
   items.forEach(p=>{
-    const d=document.createElement('div');d.className='pitem';d.draggable=true;
+    const d=document.createElement('div');d.className='pitem'+(armed&&armed.type==='place'&&armed.k===p.k?' armed':'');d.draggable=true;
     d.innerHTML=`<span class="em">${p.e}</span><span class="nm">${p.n}</span><span class="lt">${lightEmoji(p.l)} ${p.s}ft</span>`;
     d.addEventListener('dragstart',ev=>{ev.dataTransfer.setData('text/plain',JSON.stringify({src:'palette',k:p.k}));});
+    d.addEventListener('click',()=>{ // tap to arm (works on touch)
+      armed=(armed&&armed.type==='place'&&armed.k===p.k)?null:{type:'place',k:p.k};
+      updateArmBar();renderPalette();});
     box.appendChild(d);
   });
+}
+function updateArmBar(){
+  const bar=document.getElementById('armbar');
+  if(!armed){bar.style.display='none';bar.innerHTML='';renderZones();return;}
+  let label;
+  if(armed.type==='place'){const p=PLANTBY[armed.k];label=`Placing <b>${p.e} ${p.n}</b> — tap a cell`;}
+  else {const pl=state.placements.find(x=>x.id===armed.id);const p=pl&&PLANTBY[pl.k];label=`Moving <b>${p?p.e+' '+p.n:'plant'}</b> — tap a cell`;}
+  bar.style.display='flex';bar.innerHTML=label+'<button id="armCancel">cancel</button>';
+  document.getElementById('armCancel').onclick=()=>{armed=null;updateArmBar();renderPalette();};
+  renderZones();
 }
 
 /* ---------- zones ---------- */
@@ -335,10 +373,11 @@ function renderZones(){
     g.style.gridTemplateRows=`repeat(${z.W},${cp}px)`;
     g.style.width=(z.L*cp)+'px';
     for(let r=0;r<z.W;r++)for(let c=0;c<z.L;c++){
-      const cell=document.createElement('div');cell.className='cell';cell.dataset.c=c;cell.dataset.r=r;cell.dataset.z=z.id;
+      const cell=document.createElement('div');cell.className='cell'+(armed?' arm':'');cell.dataset.c=c;cell.dataset.r=r;cell.dataset.z=z.id;
       cell.addEventListener('dragover',ev=>{ev.preventDefault();cell.classList.add('hover');});
       cell.addEventListener('dragleave',()=>cell.classList.remove('hover'));
       cell.addEventListener('drop',ev=>{ev.preventDefault();cell.classList.remove('hover');onDrop(ev,z.id,c,r);});
+      cell.addEventListener('click',()=>onCellTap(z.id,c,r));
       g.appendChild(cell);
     }
     state.placements.filter(pl=>pl.zoneId===z.id).forEach(pl=>{
@@ -350,8 +389,13 @@ function renderZones(){
       const span=document.createElement('div');span.className='canopy';
       const d=p.s*cp;span.style.width=d+'px';span.style.height=d+'px';span.style.left='50%';span.style.top='50%';
       t.appendChild(span);
+      const x=document.createElement('div');x.className='x';x.textContent='✕';x.title='Remove';
+      x.addEventListener('click',ev=>{ev.stopPropagation();state.placements=state.placements.filter(y=>y.id!==pl.id);if(armed&&armed.id===pl.id)armed=null;save();updateArmBar();});
+      t.appendChild(x);
       t.addEventListener('dragstart',ev=>{ev.dataTransfer.setData('text/plain',JSON.stringify({src:'placed',id:pl.id}));});
-      t.addEventListener('dblclick',()=>{state.placements=state.placements.filter(x=>x.id!==pl.id);save();renderZones();});
+      t.addEventListener('dblclick',()=>{state.placements=state.placements.filter(y=>y.id!==pl.id);save();renderZones();});
+      t.addEventListener('click',ev=>{ev.stopPropagation(); // tap to pick up for moving (touch)
+        armed=(armed&&armed.type==='move'&&armed.id===pl.id)?null:{type:'move',id:pl.id};updateArmBar();renderPalette();});
       cell.appendChild(t);
     });
     gw.appendChild(g);wrap.appendChild(gw);
@@ -377,6 +421,20 @@ function onDrop(ev,zoneId,c,r){
     pl.zoneId=zoneId;pl.c=c;pl.r=r;
   }
   save();renderZones();
+}
+
+function onCellTap(zoneId,c,r){
+  if(!armed)return;
+  const occupied=state.placements.find(p=>p.zoneId===zoneId&&p.c===c&&p.r===r);
+  if(armed.type==='place'){
+    if(occupied)return;
+    state.placements.push({id:uid(),zoneId,k:armed.k,c,r});
+    save();updateArmBar(); // stays armed so you can place several
+  }else if(armed.type==='move'){
+    const pl=state.placements.find(p=>p.id===armed.id);if(!pl)return;
+    if(occupied&&occupied.id!==pl.id)return;
+    pl.zoneId=zoneId;pl.c=c;pl.r=r;armed=null;save();updateArmBar();renderPalette();
+  }
 }
 
 function editZone(id){

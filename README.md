@@ -19,6 +19,9 @@ install, no account, nothing leaves your browser.
 - **Canopy toggle** draws each plant's mature spread so you can space things properly.
 - **Light-mismatch warnings** flag any plant whose needs don't match its zone.
 - **Move / remove** placed plants by dragging; **export / import** your plan as JSON.
+- **Works on mobile** — the layout stacks on small screens, and since drag doesn't work on
+  touch, you can **tap a plant then tap a cell** to place it (tap a placed plant to move it,
+  or the ✕ to remove it). Drag-and-drop still works on desktop.
 - **Auto-saves** to your browser — pick up where you left off.
 
 ## Why zones + light + size?
