@@ -12,8 +12,10 @@ install, no account, nothing leaves your browser.
 
 ## What it does
 - **Add any number of zones** with a name, light setting, and length × width in feet.
-- **Drag plants** from a categorised palette (Trees · Shrubs & flowers · Foliage & indoor ·
-  Edibles · Ground & climbers) onto a 1-ft grid.
+- **Drag plants** from a large library (~95 popular home-garden species worldwide), browsable
+  by category (Trees · Shrubs & flowers · Foliage & indoor · Edibles · Ground & climbers).
+- **Country filter + search** — pick a country to see plants commonly grown in home gardens
+  there (plus worldwide staples), or type to search the whole library.
 - **Canopy toggle** draws each plant's mature spread so you can space things properly.
 - **Light-mismatch warnings** flag any plant whose needs don't match its zone.
 - **Move / remove** placed plants by dragging; **export / import** your plan as JSON.
@@ -37,8 +39,11 @@ The plant list is intentionally generic. To add region-specific species, edit th
 array near the top of the `<script>` in `index.html`. Each entry is:
 
 ```js
-{k:"unique_key", n:"Display name", e:"🌺", c:"Category", l:"full|partial|shade", s:spreadFeet, col:"#hexcolour"}
+{k:"unique_key", n:"Display name", e:"🌺", c:"Category", l:"full|partial|shade", s:spreadFeet, col:"#hexcolour", co:["India","USA","WW"]}
 ```
+
+`co` is the list of countries where the plant is a popular home-garden choice; use `"WW"`
+for worldwide staples that should appear under every country filter.
 
 ## Tech
 A single static `index.html` — vanilla HTML/CSS/JS, no dependencies, no build step. Host it

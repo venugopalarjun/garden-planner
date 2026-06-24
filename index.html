@@ -24,18 +24,21 @@
   button.ghost{background:transparent;box-shadow:none}
   input,select{border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:#fff}
   .layout{display:flex;gap:16px;align-items:flex-start;padding:16px 20px}
-  .palette{flex:0 0 250px;position:sticky;top:120px;background:var(--panel);border:1px solid var(--line);
+  .palette{flex:0 0 270px;position:sticky;top:120px;background:var(--panel);border:1px solid var(--line);
            border-radius:12px;padding:12px;box-shadow:var(--shadow);max-height:calc(100vh - 150px);overflow:auto}
   .palette h2{font-size:13px;margin:0 0 8px;text-transform:uppercase;letter-spacing:.04em;color:var(--soft)}
+  .filters{display:flex;flex-direction:column;gap:7px;margin-bottom:9px}
+  .filters input,.filters select{width:100%}
   .tabs{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
   .tabs button{padding:4px 8px;font-size:12px;border-radius:999px}
   .tabs button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .pcount{font-size:11px;color:var(--soft);margin-bottom:6px}
   .pitem{display:flex;align-items:center;gap:7px;padding:6px 7px;border:1px solid var(--line);border-radius:8px;
          margin-bottom:5px;cursor:grab;background:#fff;user-select:none}
   .pitem:active{cursor:grabbing}
   .pitem .em{font-size:16px;width:20px;text-align:center}
   .pitem .nm{flex:1;font-size:12.5px}
-  .pitem .lt{font-size:10px;color:var(--soft);border:1px solid var(--line);border-radius:999px;padding:1px 6px}
+  .pitem .lt{font-size:10px;color:var(--soft);border:1px solid var(--line);border-radius:999px;padding:1px 6px;white-space:nowrap}
   .zones{flex:1;min-width:0;display:flex;flex-direction:column;gap:18px}
   .zone{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;box-shadow:var(--shadow)}
   .zone .zh{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
@@ -70,13 +73,12 @@
   #trash.hot{border-color:var(--warn);color:var(--warn);background:#fbeee8}
   .row{display:flex;gap:6px;align-items:center}
   .mini{font-size:11px;color:var(--soft)}
-  a.gh{color:var(--accent);text-decoration:none}
 </style>
 </head>
 <body>
 <header>
   <h1>🌿 Garden Planner</h1>
-  <p>Define each area of your plot — its <b>light</b> and <b>size in feet</b> — then drag plants in. Toggle canopy to see how big things get, and the planner flags any plant that's in the wrong light.</p>
+  <p>Define each area of your plot — its <b>light</b> and <b>size in feet</b> — then drag plants in. Filter the palette by <b>country</b> or <b>search</b> it, toggle canopy to see how big things get, and the planner flags any plant that's in the wrong light.</p>
   <div class="bar">
     <button class="primary" id="btnCanopy">🌳 Show canopy spread</button>
     <button id="btnExample" class="ghost">Load example</button>
@@ -92,9 +94,14 @@
 <div class="layout">
   <aside class="palette">
     <h2>Plants</h2>
+    <div class="filters">
+      <input type="search" id="search" placeholder="🔍 Search plants…" autocomplete="off"/>
+      <select id="country"></select>
+    </div>
     <div class="tabs" id="tabs"></div>
+    <div class="pcount" id="pcount"></div>
     <div id="plist"></div>
-    <div class="legend">Light tags: ☀️ full sun · ⛅ partial · 🌑 shade/indoor. Drag a plant onto any zone cell. Drag placed plants to move them, or onto the 🗑 to remove. Double-click a plant to remove it.</div>
+    <div class="legend">Light tags: ☀️ full sun · ⛅ partial · 🌑 shade/indoor. Drag a plant onto any zone cell. Drag placed plants to move them, or onto the 🗑 to remove. Double-click a plant to remove it. Country filter shows plants popular in home gardens there (plus worldwide staples).</div>
   </aside>
 
   <main class="zones" id="main">
@@ -116,60 +123,146 @@
 </div>
 
 <script>
-/* ---------- plant library (generic; light: full | partial | shade ; spread = mid-size diameter ft) ---------- */
+/* ---------- plant library ----------
+   fields: k key · n name · e emoji · c category · l light(full|partial|shade) · s mid-size spread ft · col colour · co countries (WW = worldwide staple)
+*/
 const PLANTS=[
- // Trees & large
- {k:"shade_tree",n:"Shade tree",e:"🌳",c:"Trees",l:"full",s:14,col:"#3f6a34"},
- {k:"palm",n:"Palm",e:"🌴",c:"Trees",l:"full",s:8,col:"#3f7a3a"},
- {k:"fruit_tree",n:"Fruit tree",e:"🍎",c:"Trees",l:"full",s:6,col:"#7fae5e"},
- {k:"citrus",n:"Citrus",e:"🍋",c:"Trees",l:"full",s:6,col:"#8fbf4a"},
- {k:"banana",n:"Banana",e:"🍌",c:"Trees",l:"full",s:7,col:"#6f8f3f"},
- {k:"tall_grass",n:"Bamboo / tall grass",e:"🎋",c:"Trees",l:"full",s:6,col:"#9ec06a"},
- {k:"conifer",n:"Conifer / evergreen",e:"🌲",c:"Trees",l:"full",s:6,col:"#33502f"},
- // Shrubs & flowers
- {k:"flower_shrub",n:"Flowering shrub",e:"🌺",c:"Shrubs & flowers",l:"full",s:3.5,col:"#d6453f"},
- {k:"rose",n:"Rose",e:"🌹",c:"Shrubs & flowers",l:"full",s:2.5,col:"#d64070"},
- {k:"climber_flower",n:"Flowering climber",e:"🌸",c:"Shrubs & flowers",l:"full",s:4,col:"#c0388a"},
- {k:"hedge",n:"Hedge / topiary",e:"🟩",c:"Shrubs & flowers",l:"full",s:2.5,col:"#3f6a34"},
- {k:"perennial",n:"Perennial flower",e:"🌼",c:"Shrubs & flowers",l:"full",s:1.5,col:"#e8b62c"},
- {k:"bedding",n:"Bedding annual",e:"🟡",c:"Shrubs & flowers",l:"full",s:1,col:"#e8b62c"},
- {k:"partial_flower",n:"Part-shade flower",e:"🌷",c:"Shrubs & flowers",l:"partial",s:1.5,col:"#e07b9a"},
- {k:"ornamental_grass",n:"Ornamental grass",e:"🌾",c:"Shrubs & flowers",l:"full",s:2.5,col:"#cbb76a"},
- {k:"succulent_bed",n:"Desert rose / succulent shrub",e:"🌵",c:"Shrubs & flowers",l:"full",s:1.5,col:"#e07b9a"},
- // Foliage & indoor
- {k:"foliage",n:"Leafy foliage",e:"🌿",c:"Foliage & indoor",l:"shade",s:1.7,col:"#3f6a34"},
- {k:"fern",n:"Fern",e:"🌿",c:"Foliage & indoor",l:"shade",s:2,col:"#6f9a4f"},
- {k:"snake",n:"Snake plant",e:"🪴",c:"Foliage & indoor",l:"shade",s:1.2,col:"#4f7a3e"},
- {k:"monstera",n:"Monstera",e:"🌿",c:"Foliage & indoor",l:"partial",s:3,col:"#4f8a3e"},
- {k:"peace_lily",n:"Peace lily",e:"🤍",c:"Foliage & indoor",l:"shade",s:1.5,col:"#cfe0c0"},
- {k:"anthurium",n:"Anthurium",e:"🌺",c:"Foliage & indoor",l:"shade",s:1.2,col:"#d6453f"},
- {k:"palm_indoor",n:"Indoor palm",e:"🪴",c:"Foliage & indoor",l:"partial",s:2.5,col:"#3f7a3a"},
- {k:"orchid",n:"Orchid",e:"🌸",c:"Foliage & indoor",l:"shade",s:1,col:"#c77fae"},
- {k:"jade",n:"Jade / succulent",e:"🪴",c:"Foliage & indoor",l:"partial",s:1,col:"#8fae8a"},
- // Edibles
- {k:"tomato",n:"Tomato",e:"🍅",c:"Edibles",l:"full",s:1.5,col:"#d6453f"},
- {k:"chilli",n:"Chilli / pepper",e:"🌶️",c:"Edibles",l:"full",s:1.5,col:"#3f7a3a"},
- {k:"eggplant",n:"Eggplant / brinjal",e:"🍆",c:"Edibles",l:"full",s:2,col:"#8a5aa8"},
- {k:"leafy_green",n:"Leafy greens",e:"🥬",c:"Edibles",l:"partial",s:1,col:"#5f9145"},
- {k:"herb",n:"Herb",e:"🌿",c:"Edibles",l:"full",s:1,col:"#6f9a6a"},
- {k:"root_veg",n:"Root crop (ginger/turmeric)",e:"🫚",c:"Edibles",l:"partial",s:1.5,col:"#caa45a"},
- {k:"vine_veg",n:"Vegetable vine",e:"🥒",c:"Edibles",l:"full",s:2,col:"#6f9a3f"},
- {k:"strawberry",n:"Strawberry / berry",e:"🍓",c:"Edibles",l:"full",s:1,col:"#d6453f"},
- // Ground & climbers
- {k:"groundcover",n:"Groundcover",e:"🟢",c:"Ground & climbers",l:"full",s:0.8,col:"#b6cf98"},
- {k:"shade_ground",n:"Shade groundcover",e:"🍀",c:"Ground & climbers",l:"shade",s:0.8,col:"#5f9145"},
- {k:"lawn",n:"Lawn / turf patch",e:"🟩",c:"Ground & climbers",l:"full",s:1,col:"#7fae4a"},
- {k:"wall_climber",n:"Wall climber",e:"🪟",c:"Ground & climbers",l:"partial",s:1,col:"#6f9a4f"},
- {k:"trailing",n:"Trailing / spiller",e:"🌱",c:"Ground & climbers",l:"partial",s:1,col:"#86b070"},
- {k:"pot_feature",n:"Feature pot",e:"🏺",c:"Ground & climbers",l:"partial",s:1.5,col:"#8a6a44"},
+ // ===== Trees & large =====
+ {k:"mango",n:"Mango",e:"🥭",c:"Trees",l:"full",s:6,col:"#7fae5e",co:["India","Thailand","Mexico","Brazil"]},
+ {k:"coconut",n:"Coconut palm",e:"🌴",c:"Trees",l:"full",s:10,col:"#5f9145",co:["India","Thailand","Brazil"]},
+ {k:"areca",n:"Areca / butterfly palm",e:"🌴",c:"Trees",l:"partial",s:5,col:"#3f7a3a",co:["India","Thailand","WW"]},
+ {k:"date_palm",n:"Date palm",e:"🌴",c:"Trees",l:"full",s:12,col:"#9a7a3a",co:["UAE","Spain"]},
+ {k:"olive",n:"Olive tree",e:"🫒",c:"Trees",l:"full",s:12,col:"#8a9a5a",co:["Italy","Spain","USA"]},
+ {k:"lemon_tree",n:"Lemon / citrus tree",e:"🍋",c:"Trees",l:"full",s:6,col:"#8fbf4a",co:["WW","Italy","India","USA"]},
+ {k:"apple",n:"Apple tree",e:"🍎",c:"Trees",l:"full",s:12,col:"#c44a4a",co:["USA","UK","China","Japan"]},
+ {k:"jmaple",n:"Japanese maple",e:"🍁",c:"Trees",l:"partial",s:10,col:"#b0433a",co:["Japan","USA","UK"]},
+ {k:"magnolia",n:"Magnolia",e:"🌳",c:"Trees",l:"full",s:15,col:"#cdbf6a",co:["USA","China","UK"]},
+ {k:"jacaranda",n:"Jacaranda",e:"🌳",c:"Trees",l:"full",s:20,col:"#8a7fc0",co:["Australia","Brazil","India"]},
+ {k:"frangipani",n:"Frangipani / plumeria",e:"🌼",c:"Trees",l:"full",s:8,col:"#cdbf6a",co:["India","Thailand","Australia"]},
+ {k:"guava",n:"Guava",e:"🟢",c:"Trees",l:"full",s:6,col:"#6f9a3f",co:["India","Brazil","Mexico"]},
+ {k:"avocado",n:"Avocado",e:"🥑",c:"Trees",l:"full",s:9,col:"#4f7a3e",co:["Mexico","USA","Kenya"]},
+ {k:"fig",n:"Fig tree",e:"🌳",c:"Trees",l:"full",s:10,col:"#7a8a4a",co:["Italy","Spain","UAE","India"]},
+ {k:"pomegranate",n:"Pomegranate",e:"🔴",c:"Trees",l:"full",s:8,col:"#c46a52",co:["India","Italy","Spain","UAE"]},
+ {k:"bottlebrush",n:"Bottlebrush",e:"🌺",c:"Trees",l:"full",s:8,col:"#d6453f",co:["Australia","India"]},
+ {k:"eucalyptus",n:"Eucalyptus",e:"🌳",c:"Trees",l:"full",s:18,col:"#8aa07a",co:["Australia"]},
+ {k:"sakura",n:"Cherry blossom",e:"🌸",c:"Trees",l:"full",s:14,col:"#e0a9b8",co:["Japan","USA","UK"]},
+ {k:"crepe_myrtle",n:"Crepe myrtle",e:"🌸",c:"Trees",l:"full",s:10,col:"#d6557a",co:["USA","China","India"]},
+ {k:"bamboo",n:"Bamboo (clumping)",e:"🎋",c:"Trees",l:"partial",s:6,col:"#9ec06a",co:["China","Japan","Thailand","India"]},
+ {k:"banana",n:"Banana",e:"🍌",c:"Trees",l:"full",s:7,col:"#6f8f3f",co:["India","Brazil","Thailand"]},
+ {k:"neem",n:"Neem",e:"🌳",c:"Trees",l:"full",s:12,col:"#3f6a34",co:["India"]},
+ {k:"moringa",n:"Moringa / drumstick",e:"🌿",c:"Trees",l:"full",s:7,col:"#9ec07a",co:["India","Kenya","Thailand"]},
+ {k:"tabebuia",n:"Tabebuia / trumpet tree",e:"🌸",c:"Trees",l:"full",s:12,col:"#e07b9a",co:["Brazil","India"]},
+ {k:"conifer",n:"Conifer / spruce",e:"🌲",c:"Trees",l:"full",s:6,col:"#33502f",co:["UK","USA","Japan"]},
+
+ // ===== Shrubs & flowers =====
+ {k:"hibiscus",n:"Hibiscus",e:"🌺",c:"Shrubs & flowers",l:"full",s:3.5,col:"#d6453f",co:["India","Thailand","Kenya","WW"]},
+ {k:"bougainvillea",n:"Bougainvillea",e:"🌸",c:"Shrubs & flowers",l:"full",s:4,col:"#c0388a",co:["India","Brazil","Italy","Spain","WW"]},
+ {k:"rose",n:"Rose",e:"🌹",c:"Shrubs & flowers",l:"full",s:2.5,col:"#d6453f",co:["WW","UK","USA"]},
+ {k:"hydrangea",n:"Hydrangea",e:"💠",c:"Shrubs & flowers",l:"partial",s:4,col:"#8aa6d6",co:["Japan","USA","UK"]},
+ {k:"lavender",n:"Lavender",e:"💜",c:"Shrubs & flowers",l:"full",s:2,col:"#9a7fc0",co:["Italy","Spain","UK","USA"]},
+ {k:"azalea",n:"Azalea",e:"🌸",c:"Shrubs & flowers",l:"partial",s:3,col:"#d6557a",co:["Japan","USA","China"]},
+ {k:"camellia",n:"Camellia",e:"🌺",c:"Shrubs & flowers",l:"partial",s:5,col:"#d64070",co:["Japan","China","USA"]},
+ {k:"rhododendron",n:"Rhododendron",e:"🌺",c:"Shrubs & flowers",l:"partial",s:6,col:"#c0557a",co:["UK","USA","India"]},
+ {k:"gardenia",n:"Gardenia",e:"🤍",c:"Shrubs & flowers",l:"partial",s:3,col:"#cdd6c0",co:["India","China","USA"]},
+ {k:"jasmine",n:"Jasmine",e:"🤍",c:"Shrubs & flowers",l:"full",s:3,col:"#e8ecd4",co:["India","Thailand","WW"]},
+ {k:"ixora",n:"Ixora",e:"🌺",c:"Shrubs & flowers",l:"full",s:2,col:"#e08438",co:["India","Thailand"]},
+ {k:"oleander",n:"Oleander",e:"🌸",c:"Shrubs & flowers",l:"full",s:6,col:"#e07b9a",co:["Italy","Spain","India","USA"]},
+ {k:"tecoma",n:"Tecoma (yellow bells)",e:"🌻",c:"Shrubs & flowers",l:"full",s:4,col:"#e8b62c",co:["India","Mexico","WW"]},
+ {k:"hamelia",n:"Hamelia / firebush",e:"🌺",c:"Shrubs & flowers",l:"full",s:4,col:"#e08438",co:["Mexico","USA","India"]},
+ {k:"adenium",n:"Adenium / desert rose",e:"🌵",c:"Shrubs & flowers",l:"full",s:1.5,col:"#e07b9a",co:["UAE","India","Thailand"]},
+ {k:"protea",n:"Protea",e:"🌸",c:"Shrubs & flowers",l:"full",s:5,col:"#d6557a",co:["Kenya","Australia"]},
+ {k:"kangaroo_paw",n:"Kangaroo paw",e:"🌾",c:"Shrubs & flowers",l:"full",s:2,col:"#c46a52",co:["Australia"]},
+ {k:"fuchsia",n:"Fuchsia",e:"🌸",c:"Shrubs & flowers",l:"partial",s:2,col:"#c0388a",co:["UK","USA"]},
+ {k:"geranium",n:"Geranium / pelargonium",e:"🌸",c:"Shrubs & flowers",l:"full",s:1.5,col:"#d6453f",co:["UK","USA","Italy"]},
+ {k:"chrysanth",n:"Chrysanthemum",e:"🌼",c:"Shrubs & flowers",l:"full",s:1.5,col:"#e8b62c",co:["China","Japan","India"]},
+ {k:"dahlia",n:"Dahlia",e:"🌸",c:"Shrubs & flowers",l:"full",s:1.5,col:"#d6557a",co:["Mexico","UK","USA"]},
+ {k:"salvia",n:"Salvia",e:"🌿",c:"Shrubs & flowers",l:"full",s:2,col:"#9a3b8a",co:["Mexico","USA"]},
+ {k:"tulip",n:"Tulip",e:"🌷",c:"Shrubs & flowers",l:"full",s:0.6,col:"#d6453f",co:["Netherlands","UK","USA"]},
+ {k:"sunflower",n:"Sunflower",e:"🌻",c:"Shrubs & flowers",l:"full",s:2,col:"#e8b62c",co:["USA","WW"]},
+ {k:"zinnia",n:"Zinnia",e:"🌼",c:"Shrubs & flowers",l:"full",s:1,col:"#e07b4a",co:["Mexico","WW"]},
+ {k:"marigold",n:"Marigold",e:"🟡",c:"Shrubs & flowers",l:"full",s:1,col:"#e8b62c",co:["India","Mexico","WW"]},
+ {k:"petunia",n:"Petunia",e:"🌸",c:"Shrubs & flowers",l:"full",s:1,col:"#c0557a",co:["WW","Brazil"]},
+ {k:"begonia",n:"Begonia",e:"🌸",c:"Shrubs & flowers",l:"partial",s:1,col:"#d6557a",co:["Brazil","WW"]},
+ {k:"vinca",n:"Vinca / periwinkle",e:"🌸",c:"Shrubs & flowers",l:"full",s:1,col:"#a8c884",co:["India","WW"]},
+ {k:"crossandra",n:"Crossandra",e:"🟠",c:"Shrubs & flowers",l:"full",s:1.5,col:"#e08438",co:["India"]},
+ {k:"pentas",n:"Pentas",e:"🌸",c:"Shrubs & flowers",l:"full",s:1.5,col:"#e07b9a",co:["Kenya","India","WW"]},
+ {k:"boxwood",n:"Boxwood hedge",e:"🟩",c:"Shrubs & flowers",l:"partial",s:2.5,col:"#3f6a34",co:["UK","USA","Italy"]},
+
+ // ===== Foliage & indoor =====
+ {k:"snake",n:"Snake plant",e:"🪴",c:"Foliage & indoor",l:"shade",s:1.2,col:"#4f7a3e",co:["WW","Kenya"]},
+ {k:"monstera",n:"Monstera",e:"🌿",c:"Foliage & indoor",l:"partial",s:3,col:"#4f8a3e",co:["WW","Mexico"]},
+ {k:"pothos",n:"Pothos / money plant",e:"🌿",c:"Foliage & indoor",l:"partial",s:1,col:"#7fa05f",co:["WW","India"]},
+ {k:"zz",n:"ZZ plant",e:"🌿",c:"Foliage & indoor",l:"shade",s:1.5,col:"#33502f",co:["WW"]},
+ {k:"peace_lily",n:"Peace lily",e:"🤍",c:"Foliage & indoor",l:"shade",s:1.5,col:"#cfe0c0",co:["WW","Brazil"]},
+ {k:"anthurium",n:"Anthurium",e:"🌺",c:"Foliage & indoor",l:"shade",s:1.2,col:"#d6453f",co:["WW","Brazil"]},
+ {k:"philodendron",n:"Philodendron",e:"🌿",c:"Foliage & indoor",l:"shade",s:1.7,col:"#3f6a34",co:["WW","Brazil"]},
+ {k:"fern",n:"Fern",e:"🌿",c:"Foliage & indoor",l:"shade",s:2,col:"#6f9a4f",co:["WW"]},
+ {k:"aglaonema",n:"Aglaonema",e:"🌿",c:"Foliage & indoor",l:"shade",s:1.5,col:"#9ec08a",co:["Thailand","WW"]},
+ {k:"dieffenbachia",n:"Dieffenbachia",e:"🌿",c:"Foliage & indoor",l:"shade",s:1.7,col:"#c7d6a8",co:["WW","Brazil"]},
+ {k:"calathea",n:"Calathea",e:"🌿",c:"Foliage & indoor",l:"shade",s:1.2,col:"#5f8a4a",co:["Brazil","WW"]},
+ {k:"rubber",n:"Rubber plant",e:"🌿",c:"Foliage & indoor",l:"partial",s:4,col:"#2f4a2a",co:["India","Thailand","WW"]},
+ {k:"croton",n:"Croton",e:"🍂",c:"Foliage & indoor",l:"full",s:2.5,col:"#e08438",co:["India","Thailand"]},
+ {k:"coleus",n:"Coleus",e:"🍁",c:"Foliage & indoor",l:"partial",s:1,col:"#9a3b4a",co:["WW","Thailand"]},
+ {k:"orchid",n:"Orchid",e:"🌸",c:"Foliage & indoor",l:"shade",s:1,col:"#c77fae",co:["Thailand","WW"]},
+ {k:"jade",n:"Jade plant",e:"🪴",c:"Foliage & indoor",l:"partial",s:1,col:"#8fae8a",co:["WW","Kenya"]},
+ {k:"aloe",n:"Aloe vera",e:"🪴",c:"Foliage & indoor",l:"full",s:1.5,col:"#7fae6a",co:["WW","UAE","India"]},
+ {k:"spider",n:"Spider plant",e:"🌿",c:"Foliage & indoor",l:"partial",s:1.5,col:"#8fbf6a",co:["WW","Kenya"]},
+ {k:"bird_paradise",n:"Bird of paradise",e:"🌿",c:"Foliage & indoor",l:"full",s:4,col:"#e8901a",co:["Kenya","USA"]},
+ {k:"hosta",n:"Hosta",e:"🌿",c:"Foliage & indoor",l:"shade",s:2.5,col:"#6f9a5f",co:["Japan","USA","UK"]},
+ {k:"bonsai",n:"Bonsai (feature pot)",e:"🌳",c:"Foliage & indoor",l:"partial",s:1.5,col:"#5f7a4a",co:["Japan","WW"]},
+
+ // ===== Edibles =====
+ {k:"tomato",n:"Tomato",e:"🍅",c:"Edibles",l:"full",s:1.5,col:"#d6453f",co:["WW","Italy","Mexico"]},
+ {k:"chilli",n:"Chilli / pepper",e:"🌶️",c:"Edibles",l:"full",s:1.5,col:"#3f7a3a",co:["India","Mexico","Thailand"]},
+ {k:"eggplant",n:"Eggplant / brinjal",e:"🍆",c:"Edibles",l:"full",s:2,col:"#8a5aa8",co:["India","Thailand"]},
+ {k:"okra",n:"Okra / bhindi",e:"🌿",c:"Edibles",l:"full",s:1.5,col:"#6f9a3f",co:["India","Kenya","USA"]},
+ {k:"lettuce",n:"Lettuce",e:"🥬",c:"Edibles",l:"partial",s:1,col:"#7fae4a",co:["UK","USA","WW"]},
+ {k:"spinach",n:"Spinach / greens",e:"🥬",c:"Edibles",l:"partial",s:1,col:"#5f9145",co:["WW","India"]},
+ {k:"kale",n:"Kale",e:"🥬",c:"Edibles",l:"full",s:1.5,col:"#4f7a3e",co:["USA","UK"]},
+ {k:"basil",n:"Basil",e:"🌿",c:"Edibles",l:"full",s:1,col:"#6f9a6a",co:["Italy","India","WW"]},
+ {k:"mint",n:"Mint",e:"🌿",c:"Edibles",l:"partial",s:1,col:"#8fbf6a",co:["WW","India"]},
+ {k:"coriander",n:"Coriander / cilantro",e:"🌿",c:"Edibles",l:"full",s:0.6,col:"#6f9a4f",co:["India","Mexico","WW"]},
+ {k:"rosemary",n:"Rosemary",e:"🌿",c:"Edibles",l:"full",s:2.5,col:"#6f8a6a",co:["Italy","Spain","WW"]},
+ {k:"thyme",n:"Thyme / oregano",e:"🌿",c:"Edibles",l:"full",s:1,col:"#7f9a5a",co:["Italy","Spain","UK"]},
+ {k:"ginger",n:"Ginger",e:"🫚",c:"Edibles",l:"partial",s:1.5,col:"#caa45a",co:["India","Thailand"]},
+ {k:"turmeric",n:"Turmeric",e:"🫚",c:"Edibles",l:"partial",s:1.5,col:"#e0a92a",co:["India"]},
+ {k:"curry_leaf",n:"Curry leaf",e:"🌿",c:"Edibles",l:"full",s:2.5,col:"#3f6a34",co:["India"]},
+ {k:"lemongrass",n:"Lemongrass",e:"🌾",c:"Edibles",l:"full",s:2.5,col:"#8fae5a",co:["Thailand","India"]},
+ {k:"tulsi",n:"Tulsi / holy basil",e:"🌿",c:"Edibles",l:"full",s:1.5,col:"#3f6a34",co:["India"]},
+ {k:"strawberry",n:"Strawberry",e:"🍓",c:"Edibles",l:"full",s:1,col:"#d6453f",co:["USA","UK","Japan"]},
+ {k:"blueberry",n:"Blueberry",e:"🫐",c:"Edibles",l:"full",s:3,col:"#5a6aa8",co:["USA","UK"]},
+ {k:"cucumber",n:"Cucumber / vine veg",e:"🥒",c:"Edibles",l:"full",s:2,col:"#6f9a3f",co:["WW"]},
+ {k:"squash",n:"Pumpkin / squash",e:"🎃",c:"Edibles",l:"full",s:4,col:"#e0903a",co:["USA","Mexico","WW"]},
+ {k:"beans",n:"Beans / peas",e:"🫛",c:"Edibles",l:"full",s:1.5,col:"#6f9a3f",co:["WW"]},
+
+ // ===== Ground & climbers =====
+ {k:"lawn",n:"Lawn / turf",e:"🟩",c:"Ground & climbers",l:"full",s:1,col:"#7fae4a",co:["WW","UK","USA"]},
+ {k:"groundcover",n:"Groundcover",e:"🟢",c:"Ground & climbers",l:"full",s:0.8,col:"#b6cf98",co:["WW"]},
+ {k:"shade_ground",n:"Shade groundcover",e:"🍀",c:"Ground & climbers",l:"shade",s:0.8,col:"#5f9145",co:["WW","UK"]},
+ {k:"mondo",n:"Mondo grass",e:"🌱",c:"Ground & climbers",l:"partial",s:0.8,col:"#3f6a3a",co:["Japan","USA"]},
+ {k:"portulaca",n:"Portulaca / moss rose",e:"🌼",c:"Ground & climbers",l:"full",s:0.8,col:"#e07b4a",co:["Brazil","India","WW"]},
+ {k:"sedum",n:"Sedum / succulent mat",e:"🌵",c:"Ground & climbers",l:"full",s:1,col:"#9fc07a",co:["WW","USA"]},
+ {k:"ivy",n:"Ivy (wall)",e:"🌿",c:"Ground & climbers",l:"partial",s:1,col:"#3f6a34",co:["UK","USA"]},
+ {k:"wisteria",n:"Wisteria",e:"💜",c:"Ground & climbers",l:"full",s:10,col:"#9a8fc0",co:["Japan","China","USA"]},
+ {k:"morning_glory",n:"Morning glory",e:"🌸",c:"Ground & climbers",l:"full",s:2,col:"#7f8fc0",co:["WW"]},
+ {k:"passionflower",n:"Passion fruit vine",e:"🌸",c:"Ground & climbers",l:"full",s:3,col:"#8a5aa8",co:["Brazil","Australia"]},
+ {k:"star_jasmine",n:"Star jasmine (wall)",e:"🤍",c:"Ground & climbers",l:"full",s:2,col:"#e8ecd4",co:["Italy","USA","India"]},
+ {k:"honeysuckle",n:"Honeysuckle",e:"🌼",c:"Ground & climbers",l:"full",s:3,col:"#e8c66a",co:["UK","USA","China"]},
+ {k:"climbing_rose",n:"Climbing rose",e:"🌹",c:"Ground & climbers",l:"full",s:3,col:"#d64070",co:["WW","UK"]},
+ {k:"grapevine",n:"Grape vine",e:"🍇",c:"Ground & climbers",l:"full",s:8,col:"#7a5a8a",co:["Italy","Spain","USA"]},
+ {k:"pot_feature",n:"Feature pot",e:"🏺",c:"Ground & climbers",l:"partial",s:1.5,col:"#8a6a44",co:["WW"]},
 ];
+
 const CATS=[...new Set(PLANTS.map(p=>p.c))];
+const COUNTRY_LIST=[...new Set(PLANTS.flatMap(p=>p.co).filter(x=>x!=="WW"))].sort();
 const LIGHT_RANK={shade:1,indoor:1,partial:2,full:3};
 const PLANTBY=Object.fromEntries(PLANTS.map(p=>[p.k,p]));
-const KEY="gardenPlannerGeneric_v1";
+const KEY="gardenPlannerGeneric_v2";
 
 let state={zones:[],placements:[]};
-let curCat=CATS[0];
+let curCat="All";
+let curCountry="All";
+let curSearch="";
 let uid=()=>Math.random().toString(36).slice(2,9);
 
 /* ---------- persistence ---------- */
@@ -183,17 +276,34 @@ function lightMsg(plant,zone){
   if(need>have) return `needs more light (${plant.l}) than this ${zone.light} zone`;
   return `prefers ${plant.l}; this ${zone.light} zone may be too bright`;
 }
+function lightEmoji(l){return l==='full'?'☀️':(l==='partial'?'⛅':'🌑');}
 
 /* ---------- palette ---------- */
+function buildCountrySelect(){
+  const sel=document.getElementById('country');
+  sel.innerHTML='<option value="All">🌍 All countries</option>'+
+    COUNTRY_LIST.map(c=>`<option value="${c}">${c}</option>`).join('');
+  sel.value=curCountry;
+  sel.onchange=()=>{curCountry=sel.value;renderPalette();};
+}
 function renderTabs(){
   const t=document.getElementById('tabs');t.innerHTML='';
-  CATS.forEach(c=>{const b=document.createElement('button');b.textContent=c;
+  ['All',...CATS].forEach(c=>{const b=document.createElement('button');b.textContent=c;
     if(c===curCat)b.className='on';b.onclick=()=>{curCat=c;renderTabs();renderPalette();};t.appendChild(b);});
 }
-function lightEmoji(l){return l==='full'?'☀️':(l==='partial'?'⛅':'🌑');}
+function matchPlant(p){
+  if(curCat!=='All'&&p.c!==curCat) return false;
+  if(curCountry!=='All'&&!p.co.includes(curCountry)&&!p.co.includes('WW')) return false;
+  if(curSearch&&!p.n.toLowerCase().includes(curSearch)) return false;
+  return true;
+}
 function renderPalette(){
   const box=document.getElementById('plist');box.innerHTML='';
-  PLANTS.filter(p=>p.c===curCat).forEach(p=>{
+  const items=PLANTS.filter(matchPlant);
+  document.getElementById('pcount').textContent=items.length+' plant'+(items.length!==1?'s':'')+
+    (curCountry!=='All'?' for '+curCountry:'');
+  if(!items.length){box.innerHTML='<div class="mini">No matches — try a different country, category, or search.</div>';return;}
+  items.forEach(p=>{
     const d=document.createElement('div');d.className='pitem';d.draggable=true;
     d.innerHTML=`<span class="em">${p.e}</span><span class="nm">${p.n}</span><span class="lt">${lightEmoji(p.l)} ${p.s}ft</span>`;
     d.addEventListener('dragstart',ev=>{ev.dataTransfer.setData('text/plain',JSON.stringify({src:'palette',k:p.k}));});
@@ -210,7 +320,7 @@ function renderZones(){
     const cp=cellPx(z);
     const wrap=document.createElement('div');wrap.className='zone';
     const warns=state.placements.filter(pl=>pl.zoneId===z.id).map(pl=>{
-      const p=PLANTBY[pl.k];const m=lightMsg(p,z);return m?`${p.e} ${p.n}: ${m}`:null;}).filter(Boolean);
+      const p=PLANTBY[pl.k];if(!p)return null;const m=lightMsg(p,z);return m?`${p.e} ${p.n}: ${m}`:null;}).filter(Boolean);
     wrap.innerHTML=`<div class="zh">
         <span class="zname">${escapeHtml(z.name)}</span>
         <span class="ztag ${z.light}">${lightEmoji(z.light)} ${z.light} light</span>
@@ -231,7 +341,6 @@ function renderZones(){
       cell.addEventListener('drop',ev=>{ev.preventDefault();cell.classList.remove('hover');onDrop(ev,z.id,c,r);});
       g.appendChild(cell);
     }
-    // tokens
     state.placements.filter(pl=>pl.zoneId===z.id).forEach(pl=>{
       const p=PLANTBY[pl.k];if(!p)return;
       const cell=g.children[pl.r*z.L+pl.c];if(!cell)return;
@@ -258,7 +367,6 @@ function renderZones(){
 
 function onDrop(ev,zoneId,c,r){
   let data;try{data=JSON.parse(ev.dataTransfer.getData('text/plain'));}catch(e){return;}
-  // one plant per cell
   const occupied=state.placements.find(p=>p.zoneId===zoneId&&p.c===c&&p.r===r);
   if(data.src==='palette'){
     if(occupied)return;
@@ -278,7 +386,6 @@ function editZone(id){
   const L=parseInt(prompt('Length (ft):',z.L),10);const W=parseInt(prompt('Width (ft):',z.W),10);
   z.name=name.trim()||z.name;z.light=['full','partial','indoor'].includes(light)?light:z.light;
   if(L>0)z.L=Math.min(120,L);if(W>0)z.W=Math.min(120,W);
-  // drop placements now outside bounds
   state.placements=state.placements.filter(p=>p.zoneId!==id||(p.c<z.L&&p.r<z.W));
   save();renderZones();
 }
@@ -309,6 +416,8 @@ document.getElementById('fileImport').onchange=e=>{
   rd.onload=()=>{try{const s=JSON.parse(rd.result);if(s.zones&&s.placements){state=s;save();renderZones();}else alert('Not a valid plan file.');}catch(err){alert('Could not read file.');}};
   rd.readAsText(f);
 };
+document.getElementById('search').addEventListener('input',e=>{curSearch=e.target.value.trim().toLowerCase();renderPalette();});
+
 /* trash */
 const trash=document.getElementById('trash');
 trash.addEventListener('dragover',e=>{e.preventDefault();trash.classList.add('hot');});
@@ -326,16 +435,16 @@ document.getElementById('btnExample').onclick=()=>{
     {id:s,name:"Side path",light:"partial",L:10,W:3},
     {id:i,name:"Veranda",light:"indoor",L:6,W:4},
   ],placements:[
-    {id:uid(),zoneId:f,k:"flower_shrub",c:2,r:1},{id:uid(),zoneId:f,k:"rose",c:5,r:1},
-    {id:uid(),zoneId:f,k:"perennial",c:8,r:2},{id:uid(),zoneId:f,k:"bedding",c:11,r:3},
-    {id:uid(),zoneId:f,k:"palm",c:12,r:1},
-    {id:uid(),zoneId:s,k:"fern",c:1,r:1},{id:uid(),zoneId:s,k:"foliage",c:4,r:1},{id:uid(),zoneId:s,k:"leafy_green",c:7,r:2},
+    {id:uid(),zoneId:f,k:"hibiscus",c:2,r:1},{id:uid(),zoneId:f,k:"rose",c:5,r:1},
+    {id:uid(),zoneId:f,k:"marigold",c:8,r:2},{id:uid(),zoneId:f,k:"lavender",c:11,r:3},
+    {id:uid(),zoneId:f,k:"lemon_tree",c:12,r:1},
+    {id:uid(),zoneId:s,k:"fern",c:1,r:1},{id:uid(),zoneId:s,k:"hosta",c:4,r:1},{id:uid(),zoneId:s,k:"lettuce",c:7,r:2},
     {id:uid(),zoneId:i,k:"snake",c:1,r:1},{id:uid(),zoneId:i,k:"peace_lily",c:3,r:2},{id:uid(),zoneId:i,k:"orchid",c:4,r:1},
   ]};save();renderZones();
 };
 
 /* ---------- init ---------- */
-load();renderTabs();renderPalette();renderZones();
+load();buildCountrySelect();renderTabs();renderPalette();renderZones();
 </script>
 </body>
 </html>
